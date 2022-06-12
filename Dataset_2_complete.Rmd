@@ -1,0 +1,1966 @@
+---
+title: "Dataset 2 complete"
+output:
+  html_document: default
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+```
+* * *
+
+
+```{r}
+
+library(readxl)
+library(tidyverse) # %>%
+library(caret) # models, createDataPartition
+library(DMwR) # smote
+library(purrr) # map
+library(pROC) # AUC
+library(ggplot2)
+
+library(reshape2)
+library(gridExtra)
+
+library(randomForest)
+library(ipred) # treebag
+library(vip)
+library(xgboost)
+
+library(kableExtra)
+library(lares)
+
+library(tidymodels)
+library(DataExplorer)
+library(ggpubr)
+library(univariateML)
+
+```
+
+
+
+```{r b1}
+
+library(readxl)
+
+data = read_excel("dataset_2_complete.xlsx")
+
+colnames(data)
+
+```
+
+
+
+
+```{r}
+
+library(tidyverse) # %>%
+
+data %>% group_by(Conversion) %>% count() %>% kable() %>% kable_styling()
+
+data = data %>% filter(data$Conversion == "0" | data$Conversion == "1" | data$Conversion == "4")
+
+```
+
+
+
+```{r}
+
+data$Conversion = as.character(data$Conversion)
+
+data$Conversion = factor(data$Conversion, levels = c("1", "0", "4"), labels = c("1", "0", "CONTROL"))
+
+```
+
+
+
+```{r}
+
+data_control = data[data$Conversion == "CONTROL", ]
+
+```
+
+
+
+```{r}
+
+data = data %>% filter(data$Conversion == "0" | data$Conversion == "1") %>% droplevels()
+
+dim (data)
+
+```
+
+
+
+```{r}
+
+data = data[-c(1)]
+
+
+```
+
+
+```{r}
+
+data %>% colnames()
+
+```
+
+
+
+```{r}
+
+replace_outliers = function(x, removeNA = TRUE){
+  qrts = quantile(x, probs = c(0.25, 0.75), na.rm = removeNA)
+  caps = quantile(x, probs = c(0.05, 0.95), na.rm = removeNA)
+  iqr = qrts[2] - qrts[1]
+  h = 1.5 * iqr
+  x[x < qrts[1] - h] = caps[1]
+  x[x > qrts[2] + h] = caps[2]
+  x
+}
+
+```
+
+
+
+```{r}
+
+data$Precentral_L_2001_1 = replace_outliers(data$Precentral_L_2001_1)
+data$Precentral_R_2002_2 = replace_outliers(data$Precentral_R_2002_2)
+data$Frontal_Sup_2_L_2101_3 = replace_outliers(data$Frontal_Sup_2_L_2101_3)
+data$Frontal_Sup_2_R_2102_4 = replace_outliers(data$Frontal_Sup_2_R_2102_4)
+data$Frontal_Mid_2_L_2201_5 = replace_outliers(data$Frontal_Mid_2_L_2201_5)
+data$Frontal_Mid_2_R_2202_6 = replace_outliers(data$Frontal_Mid_2_R_2202_6)
+data$Frontal_Inf_Oper_L_2301_7 = replace_outliers(data$Frontal_Inf_Oper_L_2301_7)
+data$Frontal_Inf_Oper_R_2302_8 = replace_outliers(data$Frontal_Inf_Oper_R_2302_8)
+data$Frontal_Inf_Tri_L_2311_9 = replace_outliers(data$Frontal_Inf_Tri_L_2311_9)
+data$Frontal_Inf_Tri_R_2312_10 = replace_outliers(data$Frontal_Inf_Tri_R_2312_10)
+data$Frontal_Inf_Orb_2_L_2321_11 = replace_outliers(data$Frontal_Inf_Orb_2_L_2321_11)
+data$Frontal_Inf_Orb_2_R_2322_12 = replace_outliers(data$Frontal_Inf_Orb_2_R_2322_12)
+data$Rolandic_Oper_L_2331_13 = replace_outliers(data$Rolandic_Oper_L_2331_13)
+data$Rolandic_Oper_R_2332_14 = replace_outliers(data$Rolandic_Oper_R_2332_14)
+data$Supp_Motor_Area_L_2401_15 = replace_outliers(data$Supp_Motor_Area_L_2401_15)
+data$Supp_Motor_Area_R_2402_16 = replace_outliers(data$Supp_Motor_Area_R_2402_16)
+data$Olfactory_L_2501_17 = replace_outliers(data$Olfactory_L_2501_17)
+data$Olfactory_R_2502_18 = replace_outliers(data$Olfactory_R_2502_18)
+data$Frontal_Sup_Medial_L_2601_19 = replace_outliers(data$Frontal_Sup_Medial_L_2601_19)
+data$Frontal_Sup_Medial_R_2602_20 = replace_outliers(data$Frontal_Sup_Medial_R_2602_20)
+data$Frontal_Med_Orb_L_2611_21 = replace_outliers(data$Frontal_Med_Orb_L_2611_21)
+data$Frontal_Med_Orb_R_2612_22 = replace_outliers(data$Frontal_Med_Orb_R_2612_22)
+data$Rectus_L_2701_23 = replace_outliers(data$Rectus_L_2701_23)
+data$Rectus_R_2702_24 = replace_outliers(data$Rectus_R_2702_24)
+data$OFCmed_L_2801_25 = replace_outliers(data$OFCmed_L_2801_25)
+data$OFCmed_R_2802_26 = replace_outliers(data$OFCmed_R_2802_26)
+data$OFCant_L_2811_27 = replace_outliers(data$OFCant_L_2811_27)
+data$OFCant_R_2812_28 = replace_outliers(data$OFCant_R_2812_28)
+data$OFCpost_L_2821_29 = replace_outliers(data$OFCpost_L_2821_29)
+data$OFCpost_R_2822_30 = replace_outliers(data$OFCpost_R_2822_30)
+data$OFClat_L_2831_31 = replace_outliers(data$OFClat_L_2831_31)
+data$OFClat_R_2832_32 = replace_outliers(data$OFClat_R_2832_32)
+data$Insula_L_3001_33 = replace_outliers(data$Insula_L_3001_33)
+data$Insula_R_3002_34 = replace_outliers(data$Insula_R_3002_34)
+data$Cingulate_Ant_L_4001_35 = replace_outliers(data$Cingulate_Ant_L_4001_35)
+data$Cingulate_Ant_R_4002_36 = replace_outliers(data$Cingulate_Ant_R_4002_36)
+data$Cingulate_Mid_L_4011_37 = replace_outliers(data$Cingulate_Mid_L_4011_37)
+data$Cingulate_Mid_R_4012_38 = replace_outliers(data$Cingulate_Mid_R_4012_38)
+data$Cingulate_Post_L_4021_39 = replace_outliers(data$Cingulate_Post_L_4021_39)
+data$Cingulate_Post_R_4022_40 = replace_outliers(data$Cingulate_Post_R_4022_40)
+data$Hippocampus_L_4101_41 = replace_outliers(data$Hippocampus_L_4101_41)
+data$Hippocampus_R_4102_42 = replace_outliers(data$Hippocampus_R_4102_42)
+data$ParaHippocampal_L_4111_43 = replace_outliers(data$ParaHippocampal_L_4111_43)
+data$ParaHippocampal_R_4112_44 = replace_outliers(data$ParaHippocampal_R_4112_44)
+data$Amygdala_L_4201_45 = replace_outliers(data$Amygdala_L_4201_45)
+data$Amygdala_R_4202_46 = replace_outliers(data$Amygdala_R_4202_46)
+data$Calcarine_L_5001_47 = replace_outliers(data$Calcarine_L_5001_47)
+data$Calcarine_R_5002_48 = replace_outliers(data$Calcarine_R_5002_48)
+data$Cuneus_L_5011_49 = replace_outliers(data$Cuneus_L_5011_49)
+data$Cuneus_R_5012_50 = replace_outliers(data$Cuneus_R_5012_50)
+data$Lingual_L_5021_51 = replace_outliers(data$Lingual_L_5021_51)
+data$Lingual_R_5022_52 = replace_outliers(data$Lingual_R_5022_52)
+data$Occipital_Sup_L_5101_53 = replace_outliers(data$Occipital_Sup_L_5101_53)
+data$Occipital_Sup_R_5102_54 = replace_outliers(data$Occipital_Sup_R_5102_54)
+data$Occipital_Mid_L_5201_55 = replace_outliers(data$Occipital_Mid_L_5201_55)
+data$Occipital_Mid_R_5202_56 = replace_outliers(data$Occipital_Mid_R_5202_56)
+data$Occipital_Inf_L_5301_57 = replace_outliers(data$Occipital_Inf_L_5301_57)
+data$Occipital_Inf_R_5302_58 = replace_outliers(data$Occipital_Inf_R_5302_58)
+data$Fusiform_L_5401_59 = replace_outliers(data$Fusiform_L_5401_59)
+data$Fusiform_R_5402_60 = replace_outliers(data$Fusiform_R_5402_60)
+data$Postcentral_L_6001_61 = replace_outliers(data$Postcentral_L_6001_61)
+data$Postcentral_R_6002_62 = replace_outliers(data$Postcentral_R_6002_62)
+data$Parietal_Sup_L_6101_63 = replace_outliers(data$Parietal_Sup_L_6101_63)
+data$Parietal_Sup_R_6102_64 = replace_outliers(data$Parietal_Sup_R_6102_64)
+data$Parietal_Inf_L_6201_65 = replace_outliers(data$Parietal_Inf_L_6201_65)
+data$Parietal_Inf_R_6202_66 = replace_outliers(data$Parietal_Inf_R_6202_66)
+data$SupraMarginal_L_6211_67 = replace_outliers(data$SupraMarginal_L_6211_67)
+data$SupraMarginal_R_6212_68 = replace_outliers(data$SupraMarginal_R_6212_68)
+data$Angular_L_6221_69 = replace_outliers(data$Angular_L_6221_69)
+data$Angular_R_6222_70 = replace_outliers(data$Angular_R_6222_70)
+data$Precuneus_L_6301_71 = replace_outliers(data$Precuneus_L_6301_71)
+data$Precuneus_R_6302_72 = replace_outliers(data$Precuneus_R_6302_72)
+data$Paracentral_Lobule_L_6401_73 = replace_outliers(data$Paracentral_Lobule_L_6401_73)
+data$Paracentral_Lobule_R_6402_74 = replace_outliers(data$Paracentral_Lobule_R_6402_74)
+data$Caudate_L_7001_75 = replace_outliers(data$Caudate_L_7001_75)
+data$Caudate_R_7002_76 = replace_outliers(data$Caudate_R_7002_76)
+data$Putamen_L_7011_77 = replace_outliers(data$Putamen_L_7011_77)
+data$Putamen_R_7012_78 = replace_outliers(data$Putamen_R_7012_78)
+data$Pallidum_L_7021_79 = replace_outliers(data$Pallidum_L_7021_79)
+data$Pallidum_R_7022_80 = replace_outliers(data$Pallidum_R_7022_80)
+data$Thalamus_L_7101_81 = replace_outliers(data$Thalamus_L_7101_81)
+data$Thalamus_R_7102_82 = replace_outliers(data$Thalamus_R_7102_82)
+data$Heschl_L_8101_83 = replace_outliers(data$Heschl_L_8101_83)
+data$Heschl_R_8102_84 = replace_outliers(data$Heschl_R_8102_84)
+data$Temporal_Sup_L_8111_85 = replace_outliers(data$Temporal_Sup_L_8111_85)
+data$Temporal_Sup_R_8112_86 = replace_outliers(data$Temporal_Sup_R_8112_86)
+data$Temporal_Pole_Sup_L_8121_87 = replace_outliers(data$Temporal_Pole_Sup_L_8121_87)
+data$Temporal_Pole_Sup_R_8122_88 = replace_outliers(data$Temporal_Pole_Sup_R_8122_88)
+data$Temporal_Mid_L_8201_89 = replace_outliers(data$Temporal_Mid_L_8201_89)
+data$Temporal_Mid_R_8202_90 = replace_outliers(data$Temporal_Mid_R_8202_90)
+data$Temporal_Pole_Mid_L_8211_91 = replace_outliers(data$Temporal_Pole_Mid_L_8211_91)
+data$Temporal_Pole_Mid_R_8212_92 = replace_outliers(data$Temporal_Pole_Mid_R_8212_92)
+data$Temporal_Inf_L_8301_93 = replace_outliers(data$Temporal_Inf_L_8301_93)
+data$Temporal_Inf_R_8302_94 = replace_outliers(data$Temporal_Inf_R_8302_94)
+data$Cerebelum_Crus1_L_9001_95 = replace_outliers(data$Cerebelum_Crus1_L_9001_95)
+data$Cerebelum_Crus1_R_9002_96 = replace_outliers(data$Cerebelum_Crus1_R_9002_96)
+data$Cerebelum_Crus2_L_9011_97 = replace_outliers(data$Cerebelum_Crus2_L_9011_97)
+data$Cerebelum_Crus2_R_9012_98 = replace_outliers(data$Cerebelum_Crus2_R_9012_98)
+data$Cerebelum_3_L_9021_99 = replace_outliers(data$Cerebelum_3_L_9021_99)
+data$Cerebelum_3_R_9022_100 = replace_outliers(data$Cerebelum_3_R_9022_100)
+data$Cerebelum_4_5_L_9031_101 = replace_outliers(data$Cerebelum_4_5_L_9031_101)
+data$Cerebelum_4_5_R_9032_102 = replace_outliers(data$Cerebelum_4_5_R_9032_102)
+data$Cerebelum_6_L_9041_103 = replace_outliers(data$Cerebelum_6_L_9041_103)
+data$Cerebelum_6_R_9042_104 = replace_outliers(data$Cerebelum_6_R_9042_104)
+data$Cerebelum_7b_L_9051_105 = replace_outliers(data$Cerebelum_7b_L_9051_105)
+data$Cerebelum_7b_R_9052_106 = replace_outliers(data$Cerebelum_7b_R_9052_106)
+data$Cerebelum_8_L_9061_107 = replace_outliers(data$Cerebelum_8_L_9061_107)
+data$Cerebelum_8_R_9062_108 = replace_outliers(data$Cerebelum_8_R_9062_108)
+data$Cerebelum_9_L_9071_109 = replace_outliers(data$Cerebelum_9_L_9071_109)
+data$Cerebelum_9_R_9072_110 = replace_outliers(data$Cerebelum_9_R_9072_110)
+data$Cerebelum_10_L_9081_111 = replace_outliers(data$Cerebelum_10_L_9081_111)
+data$Cerebelum_10_R_9082_112 = replace_outliers(data$Cerebelum_10_R_9082_112)
+data$Vermis_1_2_9100_113 = replace_outliers(data$Vermis_1_2_9100_113)
+data$Vermis_3_9110_114 = replace_outliers(data$Vermis_3_9110_114)
+data$Vermis_4_5_9120_115 = replace_outliers(data$Vermis_4_5_9120_115)
+data$Vermis_6_9130_116 = replace_outliers(data$Vermis_6_9130_116)
+data$Vermis_7_9140_117 = replace_outliers(data$Vermis_7_9140_117)
+data$Vermis_8_9150_118 = replace_outliers(data$Vermis_8_9150_118)
+data$Vermis_9_9160_119 = replace_outliers(data$Vermis_9_9160_119)
+data$Vermis_10_9170_120 = replace_outliers(data$Vermis_10_9170_120)
+
+
+```
+
+
+
+
+```{r}
+
+library(tidymodels) # recipe
+
+transformer = recipe(formula = Conversion ~ .,
+                     data = data) %>%
+  step_center(all_numeric(), -all_outcomes()) %>%
+  step_scale(all_numeric(), -all_outcomes()) %>%
+  step_corr(all_numeric(), - all_outcomes(), threshold = 0.75)
+
+
+transformer_fit = prep(transformer, data)
+
+data = bake(transformer_fit, new_data = data)
+
+data[ , !names(data) %in% c("Conversion")] %>% colnames()
+
+```
+
+
+
+```{r}
+
+length(data)
+
+```
+
+
+
+```{r}
+
+covariates = paste("Precentral_R_2002_2",
+                   "Frontal_Inf_Oper_L_2301_7",
+                   "OFClat_R_2832_32",
+                   "Cingulate_Ant_R_4002_36",
+                   "Hippocampus_L_4101_41",
+                   "Calcarine_R_5002_48",
+                   "Cuneus_L_5011_49",
+                   "Cuneus_R_5012_50",
+                   "Occipital_Sup_L_5101_53",
+                   "Parietal_Sup_R_6102_64",
+                   "Parietal_Inf_R_6202_66",
+                   "SupraMarginal_L_6211_67",
+                   "Angular_L_6221_69",
+                   "Paracentral_Lobule_L_6401_73",
+                   "Paracentral_Lobule_R_6402_74",
+                   "Caudate_R_7002_76",
+                   "Pallidum_L_7021_79",
+                   "Thalamus_R_7102_82",
+                   "Heschl_R_8102_84",
+                   "Temporal_Pole_Mid_L_8211_91",
+                   "Cerebelum_Crus2_R_9012_98",
+                   "Cerebelum_3_R_9022_100",
+                   "Cerebelum_10_R_9082_112",
+                   "Vermis_1_2_9100_113",
+                   "Vermis_4_5_9120_115",
+                   "Vermis_7_9140_117",
+                   "Vermis_10_9170_120",
+                   sep = "+")
+
+
+form = as.formula(paste("Conversion ~", covariates))
+
+```
+
+
+
+
+```{r}
+
+glm.model = glm(formula = form,
+                data = data, 
+                family = binomial(link = "logit"),
+                x = TRUE)
+
+
+library(car)
+
+vif(glm.model)
+
+```
+
+
+
+
+```{r}
+
+covariates = paste("Precentral_R_2002_2",
+                   "Frontal_Inf_Oper_L_2301_7",
+                   "OFClat_R_2832_32",
+                   "Cingulate_Ant_R_4002_36",
+                   "Hippocampus_L_4101_41",
+                   "Calcarine_R_5002_48",
+                   "Cuneus_L_5011_49",
+                   "Cuneus_R_5012_50",
+                   "Occipital_Sup_L_5101_53",
+                   "Parietal_Sup_R_6102_64",
+                   "Parietal_Inf_R_6202_66",
+                   "SupraMarginal_L_6211_67",
+                   "Angular_L_6221_69",
+                   "Paracentral_Lobule_L_6401_73",
+                   "Paracentral_Lobule_R_6402_74",
+                   "Caudate_R_7002_76",
+                   "Pallidum_L_7021_79",
+                   "Thalamus_R_7102_82",
+                   "Heschl_R_8102_84",
+                   "Temporal_Pole_Mid_L_8211_91",
+                   "Cerebelum_Crus2_R_9012_98",
+                   "Cerebelum_3_R_9022_100",
+                   "Cerebelum_10_R_9082_112",
+
+                   "Vermis_4_5_9120_115",
+                   "Vermis_7_9140_117",
+                   "Vermis_10_9170_120",
+                   sep = "+")
+
+
+form = as.formula(paste("Conversion ~", covariates))
+
+```
+
+
+
+
+```{r}
+
+glm.model = glm(formula = form,
+                data = data, 
+                family = binomial(link = "logit"),
+                x = TRUE)
+
+
+library(car)
+
+vif(glm.model)
+
+```
+
+
+
+
+```{r}
+
+covariates = paste("Precentral_R_2002_2",
+                   "Frontal_Inf_Oper_L_2301_7",
+                   "OFClat_R_2832_32",
+                   "Cingulate_Ant_R_4002_36",
+                   "Hippocampus_L_4101_41",
+                   "Calcarine_R_5002_48",
+                   "Cuneus_L_5011_49",
+                   "Cuneus_R_5012_50",
+                   "Occipital_Sup_L_5101_53",
+                   "Parietal_Sup_R_6102_64",
+
+                   "SupraMarginal_L_6211_67",
+                   "Angular_L_6221_69",
+                   "Paracentral_Lobule_L_6401_73",
+                   "Paracentral_Lobule_R_6402_74",
+                   "Caudate_R_7002_76",
+                   "Pallidum_L_7021_79",
+                   "Thalamus_R_7102_82",
+                   "Heschl_R_8102_84",
+                   "Temporal_Pole_Mid_L_8211_91",
+                   "Cerebelum_Crus2_R_9012_98",
+                   "Cerebelum_3_R_9022_100",
+                   "Cerebelum_10_R_9082_112",
+
+                   "Vermis_4_5_9120_115",
+                   "Vermis_7_9140_117",
+                   "Vermis_10_9170_120",
+                   sep = "+")
+
+
+form = as.formula(paste("Conversion ~", covariates))
+
+```
+
+
+
+
+```{r}
+
+glm.model = glm(formula = form,
+                data = data, 
+                family = binomial(link = "logit"),
+                x = TRUE)
+
+
+library(car)
+
+vif(glm.model)
+
+```
+
+
+
+
+
+```{r}
+
+covariates = paste("Precentral_R_2002_2",
+                   "Frontal_Inf_Oper_L_2301_7",
+                   "OFClat_R_2832_32",
+                   "Cingulate_Ant_R_4002_36",
+                   "Hippocampus_L_4101_41",
+                   "Calcarine_R_5002_48",
+
+                   "Cuneus_R_5012_50",
+                   "Occipital_Sup_L_5101_53",
+                   "Parietal_Sup_R_6102_64",
+
+                   "SupraMarginal_L_6211_67",
+                   "Angular_L_6221_69",
+                   "Paracentral_Lobule_L_6401_73",
+                   "Paracentral_Lobule_R_6402_74",
+                   "Caudate_R_7002_76",
+                   "Pallidum_L_7021_79",
+                   "Thalamus_R_7102_82",
+                   "Heschl_R_8102_84",
+                   "Temporal_Pole_Mid_L_8211_91",
+                   "Cerebelum_Crus2_R_9012_98",
+                   "Cerebelum_3_R_9022_100",
+                   "Cerebelum_10_R_9082_112",
+
+                   "Vermis_4_5_9120_115",
+                   "Vermis_7_9140_117",
+                   "Vermis_10_9170_120",
+                   sep = "+")
+
+
+form = as.formula(paste("Conversion ~", covariates))
+
+```
+
+
+
+
+```{r}
+
+glm.model = glm(formula = form,
+                data = data, 
+                family = binomial(link = "logit"),
+                x = TRUE)
+
+
+library(car)
+
+vif(glm.model)
+
+```
+
+
+
+
+```{r}
+
+dim (data)
+
+data[, "Vermis_1_2_9100_113"] = NULL
+data[, "Parietal_Inf_R_6202_66"] = NULL
+data[, "Cuneus_L_5011_49"] = NULL
+
+dim (data)
+
+data %>% colnames()
+
+
+```
+
+
+
+
+```{r}
+
+
+library(caret)
+
+set.seed(123)
+
+
+train_row_numbers = createDataPartition(data$Conversion, p = 0.8, list = FALSE)
+
+data_train = data[train_row_numbers, ]
+data_test = data[-train_row_numbers, ]
+
+
+```
+
+
+```{r}
+
+freq = table(data_train$Conversion, dnn = "level")
+table_Conversion = data.frame(freq)
+table_Conversion$Proportion = (table_Conversion$Freq / sum(table_Conversion$Freq))*100
+table_Conversion
+
+dim(data_train)
+
+
+freq = table(data_test$Conversion, dnn = "level")
+table_Conversion = data.frame(freq)
+table_Conversion$Proportion = (table_Conversion$Freq / sum(table_Conversion$Freq))*100
+table_Conversion
+
+dim(data_test)
+
+```
+
+
+
+```{r}
+
+
+levels(data_train$Conversion) = make.names(levels(factor(data_train$Conversion)))
+
+levels(data_test$Conversion) = make.names(levels(factor(data_test$Conversion)))
+
+
+ctrl = trainControl(method = "cv",
+                    number = 10,
+                    returnResamp = "final",
+                    verboseIter = FALSE,
+                    summaryFunction = twoClassSummary,
+                    classProbs = TRUE)
+
+
+
+```
+
+
+
+```{r}
+
+tuneGrid = expand.grid(mtry = 1:length(data)-1)
+
+
+set.seed(123)
+rf_orig_fit = train(Conversion ~ .,
+                    data = data_train,
+                    method = "rf",
+                    metric = "ROC",
+                    trControl = ctrl,
+                    tuneGrid = tuneGrid,
+                    importance = TRUE)
+
+rf_orig_fit
+
+
+ctrl$sampling = "down"
+tuneGrid = expand.grid(mtry = 1:length(data)-1)
+
+
+set.seed(123)
+rf_down_fit = train(Conversion ~ .,
+                    data = data_train,
+                    method = "rf",
+                    metric = "ROC",
+                    trControl = ctrl,
+                    tuneGrid = tuneGrid,
+                    importance = TRUE)
+
+rf_down_fit
+
+
+ctrl$sampling = "up"
+tuneGrid = expand.grid(mtry = 1:length(data)-1)
+
+
+set.seed(123)
+rf_up_fit = train(Conversion ~ .,
+                  data = data_train,
+                  method = "rf",
+                  metric = "ROC",
+                  trControl = ctrl,
+                  tuneGrid = tuneGrid,
+                  importance = TRUE)
+
+rf_up_fit
+
+
+ctrl$sampling = "smote"
+
+tuneGrid = expand.grid(mtry = 1:length(data)-1)
+
+
+set.seed(123)
+rf_smote_fit = train(Conversion ~ .,
+                     data = data_train,
+                     method = "rf",
+                     metric = "ROC",
+                     trControl = ctrl,
+                     tuneGrid = tuneGrid,
+                     importance = TRUE)
+
+rf_smote_fit
+
+```
+
+
+
+```{r}
+
+
+set.seed(123)
+treebag_orig_fit = train(Conversion ~ .,
+                         data = data_train,
+                         method = "treebag",
+                         metric = "ROC",
+                         trControl = ctrl)
+
+
+
+
+ctrl$sampling = "down"
+
+set.seed(123)
+treebag_down_fit = train(Conversion ~ .,
+                         data = data_train,
+                         method = "treebag",
+                         metric = "ROC",
+                         trControl = ctrl)
+
+
+
+ctrl$sampling = "up"
+
+set.seed(123)
+treebag_up_fit = train(Conversion ~ .,
+                       data = data_train,
+                       method = "treebag",
+                       metric = "ROC",
+                       trControl = ctrl)
+
+
+
+ctrl$sampling = "smote"
+
+set.seed(123)
+treebag_smote_fit = train(Conversion ~ .,
+                          data = data_train,
+                          method = "treebag",
+                          metric = "ROC",
+                          trControl = ctrl)
+
+
+
+```
+
+
+
+```{r}
+
+
+ctrl = trainControl(method = "cv",
+                    number = 10,
+                    returnResamp = "final",
+                    verboseIter = FALSE,
+                    summaryFunction = twoClassSummary,
+                    classProbs = TRUE,
+                    allowParallel = TRUE)
+
+
+
+xgb_grid = expand.grid(nrounds = 200,
+                       eta = c(0.01, 0.05, 0.1),
+                       max_depth = c(2, 3, 4, 5),
+                       gamma = 0,
+                       colsample_bytree = 1,
+                       min_child_weight = 1,
+                       subsample = 1)
+
+
+
+set.seed(123)
+xgbtree_orig_fit = train(Conversion ~ .,
+                         data = data_train,
+                         method = "xgbTree",
+                         metric = "ROC",
+                         trControl = ctrl,
+                         tuneGrid = xgb_grid,
+                         nthreads = 4)
+
+xgbtree_orig_fit
+
+
+ctrl$sampling = "down"
+
+set.seed(123)
+xgbtree_down_fit = train(Conversion ~ .,
+                         data = data_train,
+                         method = "xgbTree",
+                         metric = "ROC",
+                         trControl = ctrl,
+                         tuneGrid = xgb_grid,
+                         nthreads = 4)
+
+xgbtree_down_fit
+
+
+ctrl$sampling = "up"
+
+set.seed(123)
+xgbtree_up_fit = train(Conversion ~ .,
+                       data = data_train,
+                       method = "xgbTree",
+                       metric = "ROC",
+                       trControl = ctrl,
+                       tuneGrid = xgb_grid,
+                       nthreads = 4)
+
+xgbtree_up_fit
+
+
+ctrl$sampling = "smote"
+
+set.seed(123)
+xgbtree_smote_fit = train(Conversion ~ .,
+                          data = data_train,
+                          method = "xgbTree",
+                          metric = "ROC",
+                          trControl = ctrl,
+                          tuneGrid = xgb_grid,
+                          nthreads = 4)
+
+
+xgbtree_smote_fit
+
+```
+
+
+
+```{r}
+
+models = list(rf_original = rf_orig_fit,
+               rf_down = rf_down_fit,
+               rf_up = rf_up_fit,
+               rf_smote = rf_smote_fit,
+               treebag_original = treebag_orig_fit,
+               treebag_down = treebag_down_fit,
+               treebag_up = treebag_up_fit,
+               treebag_smote = treebag_smote_fit,
+               xgbtree_original = xgbtree_orig_fit,
+               xgbtree_down = xgbtree_down_fit,
+               xgbtree_up = xgbtree_up_fit,
+               xgbtree_smote = xgbtree_smote_fit)
+               
+                 
+
+all_models = resamples(models)
+
+
+
+summary(all_models)
+
+
+```
+
+
+```{r}
+
+theme1 = trellis.par.get()
+
+theme1$plot.symbol$col = rgb(.2, .2, .2, .4)
+theme1$plot.symbol$pch = 16
+theme1$plot.line$col = rgb(1, 0, 0, .7)
+theme1$plot.line$lwd = 2
+
+trellis.par.set(theme1)
+bwplot(all_models, layout = c(3, 1))
+
+
+
+```
+
+
+
+
+```{r}
+
+preds = predict(rf_orig_fit, data_test)
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Random Forest (original)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#ff823a')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#ffb588')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#ffb588')
+     rect(250, 305, 340, 365, col='#ff823a')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r}
+
+imp = varImp(rf_orig_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b21}
+
+preds = predict(rf_down_fit, data_test)
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b22}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Random Forest (down)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#ff823a')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#ffb588')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#ffb588')
+     rect(250, 305, 340, 365, col='#ff823a')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b23}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b24}
+
+imp = varImp(rf_down_fit, scale = TRUE)
+imp
+
+dotPlot(imp)
+
+
+
+```
+
+
+
+```{r b25}
+
+preds = predict(rf_up_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b26}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Random Forest (up)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#ff823a')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#ffb588')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#ffb588')
+     rect(250, 305, 340, 365, col='#ff823a')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b27}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b28}
+
+imp = varImp(rf_up_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b29}
+
+preds = predict(rf_smote_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b30}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Random Forest (smote)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#ff823a')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#ffb588')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#ffb588')
+     rect(250, 305, 340, 365, col='#ff823a')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b31}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b32}
+
+imp = varImp(rf_smote_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b33}
+
+preds = predict(treebag_orig_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b34}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Treebag (original)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#5f5d8d')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#adaac5')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#adaac5')
+     rect(250, 305, 340, 365, col='#5f5d8d')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b35}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b36}
+
+imp = varImp(treebag_orig_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b37}
+
+preds = predict(treebag_down_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b38}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Treebag (down)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#5f5d8d')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#adaac5')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#adaac5')
+     rect(250, 305, 340, 365, col='#5f5d8d')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b39}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b40}
+
+imp = varImp(treebag_down_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b41}
+
+preds = predict(treebag_up_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b42}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Treebag (up)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#5f5d8d')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#adaac5')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#adaac5')
+     rect(250, 305, 340, 365, col='#5f5d8d')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b43}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b44}
+
+imp = varImp(treebag_up_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b45}
+
+preds = predict(treebag_smote_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b46}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Treebag (smote)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#5f5d8d')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#adaac5')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#adaac5')
+     rect(250, 305, 340, 365, col='#5f5d8d')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b47}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b48}
+
+imp = varImp(treebag_smote_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b49}
+
+preds = predict(xgbtree_orig_fit, data_test)
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b50}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Xgbtree (original)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#714c62')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#c5b4bd')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#c5b4bd')
+     rect(250, 305, 340, 365, col='#714c62')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b51}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b52}
+
+imp = varImp(xgbtree_orig_fit, scale=TRUE)
+dotPlot(imp)
+
+```
+
+
+
+
+```{r b53}
+
+preds = predict(xgbtree_down_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b54}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Xgbtree (down)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#714c62')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#c5b4bd')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#c5b4bd')
+     rect(250, 305, 340, 365, col='#714c62')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b55}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b56}
+
+imp = varImp(xgbtree_down_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r b57}
+
+preds = predict(xgbtree_up_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b58}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Xgbtree (up)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#714c62')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#c5b4bd')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#c5b4bd')
+     rect(250, 305, 340, 365, col='#714c62')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b59}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b60}
+
+imp = varImp(xgbtree_up_fit, scale=TRUE)
+imp
+dotPlot(imp)
+
+```
+
+
+
+```{r b61}
+
+preds = predict(xgbtree_smote_fit, data_test)
+
+cm = confusionMatrix(preds, data_test$Conversion, positive = "X1")
+
+```
+
+
+
+
+```{r b62}
+
+draw_confusion_matrix = function(cm) {
+
+     layout(matrix(c(1,1,2)))
+     par(mar=c(2,2,2,2))
+     plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+     title('CONFUSION MATRIX   Xgbtree (smote)', cex.main=2)
+
+     # create the matrix 
+     rect(150, 430, 240, 370, col='#714c62')
+     text(195, 435, 'Class 1', cex=1.2)
+     rect(250, 430, 340, 370, col='#c5b4bd')
+     text(295, 435, 'Class 0', cex=1.2)
+     text(125, 370, 'Predicted Class', cex=1.3, srt=90, font=2)
+     text(245, 450, 'True Class', cex=1.3, font=2)
+     rect(150, 305, 240, 365, col='#c5b4bd')
+     rect(250, 305, 340, 365, col='#714c62')
+     text(140, 400, 'Class 1', cex=1.2, srt=90)
+     text(140, 335, 'Class 0', cex=1.2, srt=90)
+
+     # add in the cm results 
+     res <- as.numeric(cm$table)
+     text(195, 400, res[1], cex=1.6, font=2, col='white')
+     text(195, 335, res[2], cex=1.6, font=2, col='white')
+     text(295, 400, res[3], cex=1.6, font=2, col='white')
+     text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+     # add in the specifics 
+     plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "STATISTICS", xaxt='n', yaxt='n')
+     text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
+     text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
+     text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
+     text(30, 70, round(as.numeric(cm$byClass[2]), 3), cex=1.2)
+     text(50, 85, names(cm$byClass[5]), cex=1.2, font=2)
+     text(50, 70, round(as.numeric(cm$byClass[5]), 3), cex=1.2)
+     text(70, 85, names(cm$byClass[6]), cex=1.2, font=2)
+     text(70, 70, round(as.numeric(cm$byClass[6]), 3), cex=1.2)
+     text(90, 85, names(cm$byClass[7]), cex=1.2, font=2)
+     text(90, 70, round(as.numeric(cm$byClass[7]), 3), cex=1.2)
+
+     # add in the accuracy information 
+     text(30, 35, names(cm$overall[1]), cex=1.5, font=2)
+     text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
+     text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
+     text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
+}  
+
+
+```
+
+
+
+```{r b63}
+
+draw_confusion_matrix(cm)
+
+
+```
+
+
+
+```{r b64}
+
+imp = varImp(xgbtree_smote_fit, scale = TRUE)
+dotPlot(imp)
+
+```
+
+
+
+```{r}
+
+test_roc = function(model, data) {
+  
+  roc(data_test$Conversion,
+      predict(model, data, type = "prob")[, "X1"],
+      levels = c("X0", "X1"))
+
+}
+
+
+model_list = list(rf_original = rf_orig_fit,
+               rf_down = rf_down_fit,
+               rf_up = rf_up_fit,
+               rf_smote = rf_smote_fit,
+               treebag_original = treebag_orig_fit,
+               treebag_down = treebag_down_fit,
+               treebag_up = treebag_up_fit,
+               treebag_smote = treebag_smote_fit,
+               xgbtree_original = xgbtree_orig_fit,
+               xgbtree_down = xgbtree_down_fit,
+               xgbtree_up = xgbtree_up_fit,
+               xgbtree_smote = xgbtree_smote_fit)
+               
+
+
+model_list_roc = model_list %>% map(test_roc, data = data_test)
+
+model_list_auc = model_list_roc %>% map(auc)
+model_list_auc
+
+
+```
+
+
+
+```{r}
+
+library(pander)
+
+preds_rf_orig_fit = predict(rf_orig_fit, data_test)
+preds_treebag_orig_fit = predict(treebag_orig_fit, data_test)
+preds_xgbtree_orig_fit = predict(xgbtree_orig_fit, data_test)
+
+
+
+preds_rf_down_fit = predict(rf_down_fit, data_test)
+preds_rf_up_fit = predict(rf_up_fit, data_test)
+preds_rf_smote_fit = predict(rf_smote_fit, data_test)
+
+
+preds_treebag_down_fit = predict(treebag_down_fit, data_test)
+preds_treebag_up_fit = predict(treebag_up_fit, data_test)
+preds_treebag_smote_fit = predict(treebag_smote_fit, data_test)
+
+
+preds_xgbtree_down_fit = predict(xgbtree_down_fit, data_test)
+preds_xgbtree_up_fit = predict(xgbtree_up_fit, data_test)
+preds_xgbtree_smote_fit = predict(xgbtree_smote_fit, data_test)
+
+
+
+
+sensitivity_test = c(round(as.numeric(confusionMatrix(preds_rf_orig_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_orig_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_orig_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_rf_down_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_down_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),                            round(as.numeric(confusionMatrix(preds_xgbtree_down_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),                            round(as.numeric(confusionMatrix(preds_rf_up_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),       
+                     round(as.numeric(confusionMatrix(preds_treebag_up_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),                              round(as.numeric(confusionMatrix(preds_xgbtree_up_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_rf_smote_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_smote_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_smote_fit, data_test$Conversion, positive = "X1")$byClass[1]), 2))
+
+
+
+
+
+specificity_test = c(round(as.numeric(confusionMatrix(preds_rf_orig_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_orig_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_orig_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_rf_down_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_down_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_down_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_rf_up_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_up_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_up_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_rf_smote_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_treebag_smote_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2),
+                     round(as.numeric(confusionMatrix(preds_xgbtree_smote_fit, data_test$Conversion, positive = "X1")$byClass[2]), 2))
+
+
+
+
+ model_names = c("Random Forest original",
+                 "Treebag original",
+                 "Xgbtree original",
+                 "Random Forest down",
+                 "Treebag down",
+                 "Xgbtree down",
+                 "Random Forest up",
+                 "Treebag up",
+                 "Xgbtree up",
+                 "Random Forest smote",
+                 "Treebag smote",
+                 "Xgbtree smote")
+ 
+                     
+ pander(data.frame(cbind(model_names, sensitivity_test, specificity_test)))                    
+
+```
+
+
+
+
+
+```{r}
+
+preds = predict(xgbtree_smote_fit, data_test, type = "prob")[, "X1"]
+
+library(ROCR)
+
+ROCRpred = prediction(preds, data_test$Conversion)
+
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+
+auc = performance(ROCRpred, measure = "auc")
+
+auc_height = auc@y.values
+
+plot(ROCRperf,
+     colorize = TRUE,
+     type = "l",
+     text.adj = c(-0.2, 1.7),
+     main = paste("AUC:", round(auc_height[[1]], 2)))
+
+abline(a = 0, b = 1)
+
+
+```
+
+
+
+
+
+
